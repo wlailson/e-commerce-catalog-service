@@ -1,0 +1,47 @@
+# =========================
+# Build e Compilação
+# =========================
+# Ignora as pastas de build geradas localmente na sua máquina
+target/
+build/
+.gradle/
+!target/*.jar  # (Opcional) Permite a cópia de JARs se você não usar multi-stage build, mas no seu caso o Docker vai gerar o JAR lá dentro, então a pasta target/ local deve ser ignorada.
+
+# =========================
+# IDEs (IntelliJ, VS Code, Eclipse)
+# =========================
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+.factorypath
+*.sublime-*
+
+# =========================
+# Versionamento
+# =========================
+.git/
+.gitignore
+.gitattributes
+
+# =========================
+# Logs e Arquivos Temporários
+# =========================
+*.log
+logs/
+*.tmp
+*.temp
+
+# =========================
+# Sistema Operacional
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Testes e Cobertura
+# =========================
+coverage/
+.jacocorc
