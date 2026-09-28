@@ -43,9 +43,9 @@ class ProductControllerIT extends AbstractIntegrationTest {
 
     @BeforeEach
     void cleanDatabase() {
-        jdbcTemplate.update("DELETE FROM tb_product_category");
-        jdbcTemplate.update("DELETE FROM tb_product");
-        jdbcTemplate.update("DELETE FROM tb_category");
+        jdbcTemplate.update("DELETE FROM catalog.tb_product_category");
+        jdbcTemplate.update("DELETE FROM catalog.tb_product");
+        jdbcTemplate.update("DELETE FROM catalog.tb_category");
     }
 
     private String token(String... roles) {
@@ -74,7 +74,7 @@ class ProductControllerIT extends AbstractIntegrationTest {
 
     private long createCategory(String name) {
         return Objects.requireNonNull(jdbcTemplate.queryForObject(
-                "INSERT INTO tb_category (name) VALUES (?) RETURNING id",
+                "INSERT INTO catalog.tb_category (name) VALUES (?) RETURNING id",
                 Long.class,
                 name
         ));
@@ -145,11 +145,19 @@ class ProductControllerIT extends AbstractIntegrationTest {
         }
 
         @Test
-        void requiresAuthentication() {
+        void allowsAnonymousRequest() {
+            long categoryId = createCategory("Audio");
+            ProductDTO created = createProduct(
+                    "Wireless Headphones", "Wireless over-ear headphones", 89.99, "headphones.png", categoryId
+            );
+
             client.get()
-                    .uri("/products/1")
+                    .uri("/products/{id}", created.id())
                     .exchange()
-                    .expectStatus().isUnauthorized();
+                    .expectStatus().isOk()
+                    .expectBody()
+                    .jsonPath("$.id").isEqualTo(created.id())
+                    .jsonPath("$.name").isEqualTo("Wireless Headphones");
         }
     }
 
@@ -216,11 +224,14 @@ class ProductControllerIT extends AbstractIntegrationTest {
         }
 
         @Test
-        void requiresAuthentication() {
+        void allowsAnonymousRequest() {
             client.get()
                     .uri("/products")
                     .exchange()
-                    .expectStatus().isUnauthorized();
+                    .expectStatus().isOk()
+                    .expectBody()
+                    .jsonPath("$.content.length()").isEqualTo(0)
+                    .jsonPath("$.totalElements").isEqualTo(0);
         }
     }
 
@@ -247,7 +258,7 @@ class ProductControllerIT extends AbstractIntegrationTest {
                     .jsonPath("$.categories[0].id").isEqualTo(categoryId);
 
             assertThat(jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM tb_product WHERE name = ?",
+                    "SELECT COUNT(*) FROM catalog.tb_product WHERE name = ?",
                     Integer.class,
                     "Bluetooth Speaker"
             )).isEqualTo(1);
@@ -276,7 +287,7 @@ class ProductControllerIT extends AbstractIntegrationTest {
                     .jsonPath("$.errors.categories").exists();
 
             assertThat(jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM tb_product",
+                    "SELECT COUNT(*) FROM catalog.tb_product",
                     Integer.class
             )).isZero();
         }
@@ -292,7 +303,7 @@ class ProductControllerIT extends AbstractIntegrationTest {
                     .expectStatus().isNotFound();
 
             assertThat(jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM tb_product",
+                    "SELECT COUNT(*) FROM catalog.tb_product",
                     Integer.class
             )).isZero();
         }
@@ -478,12 +489,12 @@ class ProductControllerIT extends AbstractIntegrationTest {
                     .expectBody().isEmpty();
 
             assertThat(jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM tb_product WHERE id = ?",
+                    "SELECT COUNT(*) FROM catalog.tb_product WHERE id = ?",
                     Integer.class,
                     created.id()
             )).isZero();
             assertThat(jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM tb_product_category WHERE product_id = ?",
+                    "SELECT COUNT(*) FROM catalog.tb_product_category WHERE product_id = ?",
                     Integer.class,
                     created.id()
             )).isZero();

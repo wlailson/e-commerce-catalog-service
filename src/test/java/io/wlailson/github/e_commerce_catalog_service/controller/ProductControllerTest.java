@@ -104,11 +104,14 @@ class ProductControllerTest {
         }
 
         @Test
-        void requiresAuthentication() throws Exception {
-            mockMvc.perform(get("/products/10"))
-                    .andExpect(status().isUnauthorized());
+        void allowsAnonymousRequest() throws Exception {
+            when(service.findById(10L)).thenReturn(productDTO());
 
-            verify(service, never()).findById(any());
+            mockMvc.perform(get("/products/10"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id").value(10));
+
+            verify(service).findById(10L);
         }
     }
 
@@ -139,11 +142,15 @@ class ProductControllerTest {
         }
 
         @Test
-        void requiresAuthentication() throws Exception {
-            mockMvc.perform(get("/products"))
-                    .andExpect(status().isUnauthorized());
+        void allowsAnonymousRequest() throws Exception {
+            when(service.findAll(eq(""), any()))
+                    .thenReturn(new PageImpl<>(List.of()));
 
-            verify(service, never()).findAll(any(), any());
+            mockMvc.perform(get("/products"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content").isEmpty());
+
+            verify(service).findAll(eq(""), any());
         }
     }
 
