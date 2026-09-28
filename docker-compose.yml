@@ -9,7 +9,7 @@ services:
         POSTGRES_USER: ${POSTGRES_USER}
         POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       ports:
-        - "5433:5432"
+        - "${EXTERNAL_PORT}:5432"
       volumes:
         - catalog_postgres_data:/var/lib/postgresql/data
       healthcheck:
@@ -23,25 +23,21 @@ services:
         retries: 10
         start_period: 10s
 
-
     catalog-service:
       image: ${IMAGE_NAME}:${IMAGE_TAG}
       build: .
       container_name: catalog-service
       restart: unless-stopped
-
       ports:
-        - "${PORT:-8081}:8081"
-
+        - "${SPRING_EXTERNAL_PORT}:8080"
       environment:
-        SPRING_PROFILES_ACTIVE: ${APP_PROFILE:-}
-        SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
-        SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
-        SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-        SECRET: ${JWT_SECRET}
-        CORS_ORIGINS: ${CORS_ORIGINS}
-        SERVER_PORT: 8082
-
+          SERVER_PORT: ${SERVER_PORT}
+          SPRING_PROFILES_ACTIVE: ${APP_PROFILE}
+          SPRING_DATASOURCE_URL: ${DB_URL}
+          SPRING_DATASOURCE_USERNAME: ${DB_USERNAME}
+          SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+          JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY:?Set JWT_PUBLIC_KEY to the RSA public key PEM or Base64 value}
+          CORS_ORIGINS: ${CORS_ORIGINS}
       depends_on:
         postgres:
           condition: service_healthy

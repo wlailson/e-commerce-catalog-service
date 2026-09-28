@@ -14,12 +14,10 @@ spring:
     locations: classpath:db/migration
 
 jwt:
-  duration: ${JWT_DURATION:86400}
-  refresh: ${JWT_REFRESH_DURATION:172800}
-  secret: ${SECRET:sua-chave-secreta-super-segura-que-deve-ser-bem-longa}
+  public-key: ${JWT_PUBLIC_KEY}
 
 cors:
   origins: ${CORS_ORIGINS:http://localhost:3000,http://localhost:5173,http://localhost:8080}
 
 server:
-  port: ${PORT:8082}
+  port: ${SERVER_PORT:8080}

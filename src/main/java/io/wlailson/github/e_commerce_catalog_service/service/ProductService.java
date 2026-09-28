@@ -23,8 +23,8 @@ public class ProductService {
     private final EntityManager entityManager;
 
     @Transactional(readOnly = true)
-    public ProductDTO findById(Long id) {
-        Product product = loadEntity(id);
+    public ProductDTO findById(Long productId) {
+        Product product = loadEntity(productId);
         return new ProductDTO(product);
     }
 
@@ -35,25 +35,25 @@ public class ProductService {
     }
 
     @Transactional
-    public ProductDTO insert(ProductDTO dto) {
+    public ProductDTO insert(ProductDTO request) {
         Product product = new Product();
-        copyDtoToEntity(dto, product);
+        copyDtoToEntity(request, product);
         product = repository.save(product);
         return new ProductDTO(product);
     }
 
     @Transactional
-    public ProductDTO update(Long id, ProductDTO dto) {
-        Product entity = loadEntity(id);
-        copyDtoToEntity(dto, entity);
+    public ProductDTO update(Long productId, ProductDTO request) {
+        Product entity = loadEntity(productId);
+        copyDtoToEntity(request, entity);
         entity = repository.save(entity);
         return new ProductDTO(entity);
     }
 
     @Transactional
-    public void delete(Long id) {
+    public void deleteById(Long productId) {
         try {
-            Product product = loadEntity(id);
+            Product product = loadEntity(productId);
             repository.delete(product);
             repository.flush();
         } catch (DataIntegrityViolationException e) {
@@ -69,18 +69,18 @@ public class ProductService {
                 product.getImgUrl());
     }
 
-    private Product loadEntity(Long id) {
-        return repository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Produto de id " + id + " não encontrado"));
+    private Product loadEntity(Long productId) {
+        return repository.findById(productId)
+                .orElseThrow(() -> new ResourceNotFoundException("Produto de id " + productId + " não encontrado"));
     }
 
-    private void copyDtoToEntity(ProductDTO dto, Product entity) {
-        entity.setName(dto.name());
-        entity.setDescription(dto.description());
-        entity.setImgUrl(dto.imgUrl());
-        entity.setPrice(dto.price());
+    private void copyDtoToEntity(ProductDTO request, Product entity) {
+        entity.setName(request.name());
+        entity.setDescription(request.description());
+        entity.setImgUrl(request.imgUrl());
+        entity.setPrice(request.price());
         entity.getCategories().clear();
-        dto.categories().forEach(x -> {
+        request.categories().forEach(x -> {
             Category category = entityManager.find(Category.class, x.id());
             if (category == null) {
                 throw new ResourceNotFoundException("Categoria de id " + x.id() + " não encontrada");
