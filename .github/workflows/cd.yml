@@ -47,13 +47,18 @@ jobs:
       - name: Get latest Git tag
         id: version
         run: |
-          TAG=$(git describe --tags --abbrev=0)
-
+          TAG=$(git tag --sort=-v:refname | head -n 1)
+      
+          if [ -z "$TAG" ]; then
+            echo "Nenhuma tag encontrada."
+            exit 1
+          fi
+      
           VERSION="${TAG#v}"
-
+      
           echo "Git tag: $TAG"
           echo "Docker version: $VERSION"
-
+      
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
