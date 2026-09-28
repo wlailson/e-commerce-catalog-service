@@ -1,12 +1,33 @@
-name: CD
+name: CI/CD
 
 on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+
   push:
     branches:
       - main
 
 jobs:
+  validate-source:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check source branch
+        run: |
+          if [ "${{ github.head_ref }}" != "develop" ]; then
+            echo "Only pull requests from develop are allowed into main."
+            exit 1
+          fi
+
   docker:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
 
     steps:
