@@ -4,7 +4,6 @@ import io.wlailson.github.e_commerce_catalog_service.dto.CategoryDTO;
 import io.wlailson.github.e_commerce_catalog_service.dto.ProductDTO;
 import io.wlailson.github.e_commerce_catalog_service.dto.ProductMinDTO;
 import io.wlailson.github.e_commerce_catalog_service.exceptions.ResourceNotFoundException;
-import io.wlailson.github.e_commerce_catalog_service.security.JwtConfig;
 import io.wlailson.github.e_commerce_catalog_service.security.SecurityConfig;
 import io.wlailson.github.e_commerce_catalog_service.service.ProductService;
 import org.junit.jupiter.api.Nested;
@@ -15,6 +14,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -37,12 +37,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(
         controllers = ProductController.class,
-        properties = {
-                "cors.origins=http://localhost:3000",
-                "jwt.secret=catalog-test-secret-value-with-32-bytes"
-        }
+        properties = "JWT_PUBLIC_KEY=classpath:jwt-test-public.pem"
 )
-@Import({SecurityConfig.class, JwtConfig.class})
+@Import(SecurityConfig.class)
 class ProductControllerTest {
 
     @Autowired
@@ -50,6 +47,9 @@ class ProductControllerTest {
 
     @MockitoBean
     private ProductService service;
+
+    @MockitoBean
+    private JwtDecoder jwtDecoder;
 
     private static ProductDTO productDTO() {
         return new ProductDTO(
@@ -254,7 +254,7 @@ class ProductControllerTest {
             mockMvc.perform(delete("/products/10").with(adminJwt()))
                     .andExpect(status().isNoContent());
 
-            verify(service).delete(10L);
+            verify(service).deleteById(10L);
         }
 
         @Test
@@ -262,7 +262,7 @@ class ProductControllerTest {
             mockMvc.perform(delete("/products/10"))
                     .andExpect(status().isUnauthorized());
 
-            verify(service, never()).delete(any());
+            verify(service, never()).deleteById(any());
         }
 
         @Test
@@ -270,7 +270,7 @@ class ProductControllerTest {
             mockMvc.perform(delete("/products/10").with(jwt()))
                     .andExpect(status().isForbidden());
 
-            verify(service, never()).delete(any());
+            verify(service, never()).deleteById(any());
         }
     }
 }

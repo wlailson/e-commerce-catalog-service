@@ -1,6 +1,6 @@
 package io.wlailson.github.e_commerce_catalog_service.controller;
 
-import com.nimbusds.jose.jwk.source.ImmutableSecret;
+import io.wlailson.github.e_commerce_catalog_service.security.JwtTestConfiguration;
 import io.wlailson.github.e_commerce_catalog_service.dto.ProductDTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -8,17 +8,16 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureRestTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.http.MediaType;
-import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.security.oauth2.jwt.JwsHeader;
-import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.test.web.servlet.client.RestTestClient;
 
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -27,18 +26,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = {
-                "jwt.secret=integration-test-secret-with-more-than-32-bytes",
-                "cors.origins=http://localhost:3000"
-        }
+        properties = "JWT_PUBLIC_KEY=classpath:jwt-test-public.pem"
 )
 @AutoConfigureRestTestClient
+@Import(JwtTestConfiguration.class)
 class ProductControllerIT extends AbstractIntegrationTest {
-
-    private static final String TEST_SECRET = "integration-test-secret-with-more-than-32-bytes";
 
     @Autowired
     private RestTestClient client;
+
+    @Autowired
+    private JwtEncoder jwtEncoder;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -52,12 +50,6 @@ class ProductControllerIT extends AbstractIntegrationTest {
 
     private String token(String... roles) {
         Instant now = Instant.now();
-        NimbusJwtEncoder encoder = new NimbusJwtEncoder(
-                new ImmutableSecret<>(new SecretKeySpec(
-                        TEST_SECRET.getBytes(StandardCharsets.UTF_8),
-                        "HmacSHA256"
-                ))
-        );
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer("catalog-integration-tests")
                 .subject("integration-test-user")
@@ -66,8 +58,8 @@ class ProductControllerIT extends AbstractIntegrationTest {
                 .claim("roles", List.of(roles))
                 .build();
 
-        return encoder.encode(JwtEncoderParameters.from(
-                JwsHeader.with(MacAlgorithm.HS256).build(),
+        return jwtEncoder.encode(JwtEncoderParameters.from(
+                JwsHeader.with(SignatureAlgorithm.RS256).build(),
                 claims
         )).getTokenValue();
     }

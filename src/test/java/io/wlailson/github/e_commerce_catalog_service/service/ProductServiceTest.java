@@ -219,7 +219,7 @@ class ProductServiceTest {
             Product product = product();
             when(repository.findById(10L)).thenReturn(Optional.of(product));
 
-            service.delete(10L);
+            service.deleteById(10L);
 
             verify(repository).delete(product);
             verify(repository).flush();
@@ -229,7 +229,7 @@ class ProductServiceTest {
         void throwsNotFoundWhenProductDoesNotExist() {
             when(repository.findById(404L)).thenReturn(Optional.empty());
 
-            assertThrows(ResourceNotFoundException.class, () -> service.delete(404L));
+            assertThrows(ResourceNotFoundException.class, () -> service.deleteById(404L));
 
             verify(repository, never()).delete(any(Product.class));
             verify(repository, never()).flush();
@@ -242,7 +242,7 @@ class ProductServiceTest {
             org.mockito.Mockito.doThrow(new DataIntegrityViolationException("constraint violation"))
                     .when(repository).flush();
 
-            DatabaseException exception = assertThrows(DatabaseException.class, () -> service.delete(10L));
+            DatabaseException exception = assertThrows(DatabaseException.class, () -> service.deleteById(10L));
 
             assertEquals("Falha de integridade referencial", exception.getMessage());
             verify(repository).delete(product);
