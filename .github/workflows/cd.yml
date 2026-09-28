@@ -33,6 +33,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -48,17 +51,17 @@ jobs:
         id: version
         run: |
           TAG=$(git tag --sort=-v:refname | head -n 1)
-      
+
           if [ -z "$TAG" ]; then
-            echo "Nenhuma tag encontrada."
+            echo "Nenhuma tag de versão encontrada."
             exit 1
           fi
-      
+
           VERSION="${TAG#v}"
-      
+
           echo "Git tag: $TAG"
           echo "Docker version: $VERSION"
-      
+
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
