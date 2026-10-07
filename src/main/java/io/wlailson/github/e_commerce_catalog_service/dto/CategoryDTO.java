@@ -8,8 +8,8 @@ import jakarta.validation.constraints.Positive;
 @Schema(description = "Categoria associada a um produto")
 public record CategoryDTO(
         @Schema(description = "Identificador da categoria existente", example = "1", requiredMode = Schema.RequiredMode.REQUIRED)
-        @NotNull(message = "Id da categoria é obrigatório")
-        @Positive(message = "Id da categoria deve ser positivo")
+        @NotNull(message = "Category ID is required")
+        @Positive(message = "Category ID must be positive")
         Long id,
         @Schema(description = "Nome da categoria; retornado na resposta e ignorado na associação de categorias", example = "Eletrônicos", accessMode = Schema.AccessMode.READ_ONLY)
         String name) {

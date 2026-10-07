@@ -1,0 +1,158 @@
+name: Publish Swagger
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/swagger.yml'
+      - 'pom.xml'
+      - 'src/**'
+      - 'Dockerfile'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: dev_catalog_db
+          POSTGRES_USER: wlailson
+          POSTGRES_PASSWORD: wlailson
+        ports:
+          - 5480:5432
+        options: >-
+          --health-cmd "pg_isready -U wlailson -d dev_catalog_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Build
+        run: ./mvnw --batch-mode clean package -DskipTests
+
+      - name: Start application
+        run: |
+          java -jar target/*.jar > application.log 2>&1 &
+          echo "$!" > application.pid
+
+      - name: Wait for application readiness
+        run: |
+          for attempt in {1..60}; do
+            if curl --connect-timeout 2 --max-time 5 --fail --silent http://localhost:8080/v3/api-docs >/dev/null; then
+              exit 0
+            fi
+            if ! kill -0 "$(cat application.pid)" 2>/dev/null; then
+              cat application.log
+              exit 1
+            fi
+            sleep 2
+          done
+          cat application.log
+          echo "Application did not become ready in time."
+          exit 1
+
+      - name: Download OpenAPI
+        run: |
+          curl --fail http://localhost:8080/v3/api-docs \
+            -o openapi.json
+
+      - name: Download Swagger UI
+        env:
+          SWAGGER_UI_VERSION: 5.32.0
+        run: |
+          curl --fail --location --retry 3 \
+            "https://github.com/swagger-api/swagger-ui/archive/refs/tags/v${SWAGGER_UI_VERSION}.tar.gz" \
+            -o swagger-ui.tar.gz
+
+          mkdir swagger
+
+          tar -xzf swagger-ui.tar.gz \
+            -C swagger \
+            --strip-components=2 swagger-ui-${SWAGGER_UI_VERSION}/dist
+
+      - name: Configure Swagger
+        env:
+          API_SERVER_URL: ${{ vars.PUBLIC_API_SERVER_URL }}
+        run: |
+          cp openapi.json swagger/
+
+          if [ -n "$API_SERVER_URL" ]; then
+            API_SERVER_URL="$API_SERVER_URL" python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          document_path = Path("swagger/openapi.json")
+          document = json.loads(document_path.read_text())
+          document["servers"] = [{"url": os.environ["API_SERVER_URL"]}]
+          document_path.write_text(json.dumps(document, indent=2) + "\n")
+          PY
+            SUBMIT_METHODS='["get", "put", "post", "delete", "options", "head", "patch", "trace"]'
+          else
+            python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          document_path = Path("swagger/openapi.json")
+          document = json.loads(document_path.read_text())
+          document.pop("servers", None)
+          document_path.write_text(json.dumps(document, indent=2) + "\n")
+          PY
+            SUBMIT_METHODS='[]'
+          fi
+
+          cat > swagger/swagger-initializer.js <<EOF
+          window.onload = function() {
+            window.ui = SwaggerUIBundle({
+              url: "./openapi.json",
+              dom_id: '#swagger-ui',
+              supportedSubmitMethods: ${SUBMIT_METHODS},
+              deepLinking: true,
+              presets: [
+                SwaggerUIBundle.presets.apis,
+                SwaggerUIStandalonePreset
+              ],
+              plugins: [
+                SwaggerUIBundle.plugins.DownloadUrl
+              ],
+              layout: "StandaloneLayout"
+            });
+          };
+          EOF
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: swagger
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Stop application
+        if: always()
+        run: |
+          if [ -f application.pid ]; then
+            kill "$(cat application.pid)" 2>/dev/null || true
+          fi

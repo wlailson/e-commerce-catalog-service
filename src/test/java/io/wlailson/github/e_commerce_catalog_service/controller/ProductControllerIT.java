@@ -18,11 +18,13 @@ import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.test.web.servlet.client.RestTestClient;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -80,22 +82,34 @@ class ProductControllerIT extends AbstractIntegrationTest {
         ));
     }
 
-    private String productJson(String name, String description, double price, String imgUrl, long categoryId) {
+    private String productJson(String name, String description, BigDecimal price, String imgUrl, long categoryId) {
+        return productJson(name, description, price, 10, imgUrl, categoryId);
+    }
+
+    private String productJson(
+            String name,
+            String description,
+            BigDecimal price,
+            Integer stock,
+            String imgUrl,
+            long categoryId
+    ) {
         return """
                 {
                   "name": "%s",
                   "description": "%s",
                   "price": %s,
                   "imgUrl": "%s",
+                  "stock": %d,
                   "categories": [{"id": %d, "name": "ignored request name"}]
                 }
-                """.formatted(name, description, price, imgUrl, categoryId);
+                """.formatted(name, description, price, imgUrl, stock, categoryId);
     }
 
     private ProductDTO createProduct(
             String name,
             String description,
-            double price,
+            BigDecimal price,
             String imgUrl,
             long categoryId
     ) {
@@ -119,7 +133,8 @@ class ProductControllerIT extends AbstractIntegrationTest {
         void returnsProductAndPersistedCategory() {
             long categoryId = createCategory("Audio");
             ProductDTO created = createProduct(
-                    "Wireless Headphones", "Wireless over-ear headphones", 89.99, "headphones.png", categoryId
+                    "Wireless Headphones", "Wireless over-ear headphones",
+                    new BigDecimal("89.99"), "headphones.png", categoryId
             );
 
             client.get()
@@ -131,6 +146,7 @@ class ProductControllerIT extends AbstractIntegrationTest {
                     .jsonPath("$.id").isEqualTo(created.id())
                     .jsonPath("$.name").isEqualTo("Wireless Headphones")
                     .jsonPath("$.price").isEqualTo(89.99)
+                    .jsonPath("$.stock").isEqualTo(10)
                     .jsonPath("$.categories[0].id").isEqualTo(categoryId)
                     .jsonPath("$.categories[0].name").isEqualTo("Audio");
         }
@@ -148,7 +164,8 @@ class ProductControllerIT extends AbstractIntegrationTest {
         void allowsAnonymousRequest() {
             long categoryId = createCategory("Audio");
             ProductDTO created = createProduct(
-                    "Wireless Headphones", "Wireless over-ear headphones", 89.99, "headphones.png", categoryId
+                    "Wireless Headphones", "Wireless over-ear headphones",
+                    new BigDecimal("89.99"), "headphones.png", categoryId
             );
 
             client.get()
@@ -167,9 +184,9 @@ class ProductControllerIT extends AbstractIntegrationTest {
         @Test
         void filtersCaseInsensitivelyAndReturnsPagedResults() {
             long categoryId = createCategory("Electronics");
-            createProduct("Wireless Phone", "A wireless phone device", 300.0, "phone.png", categoryId);
-            createProduct("Phone Case", "Protective case for phones", 15.0, "case.png", categoryId);
-            createProduct("Laptop", "Portable laptop computer", 900.0, "laptop.png", categoryId);
+            createProduct("Wireless Phone", "A wireless phone device", new BigDecimal("300.00"), "phone.png", categoryId);
+            createProduct("Phone Case", "Protective case for phones", new BigDecimal("15.00"), "case.png", categoryId);
+            createProduct("Laptop", "Portable laptop computer", new BigDecimal("900.00"), "laptop.png", categoryId);
 
             client.get()
                     .uri(uriBuilder -> uriBuilder.path("/products")
@@ -193,7 +210,7 @@ class ProductControllerIT extends AbstractIntegrationTest {
         @Test
         void returnsEmptyPageWhenSearchHasNoMatches() {
             long categoryId = createCategory("Electronics");
-            createProduct("Laptop", "Portable laptop computer", 900.0, "laptop.png", categoryId);
+            createProduct("Laptop", "Portable laptop computer", new BigDecimal("900.00"), "laptop.png", categoryId);
 
             client.get()
                     .uri(uriBuilder -> uriBuilder.path("/products")
@@ -210,8 +227,8 @@ class ProductControllerIT extends AbstractIntegrationTest {
         @Test
         void emptySearchReturnsAllProducts() {
             long categoryId = createCategory("General");
-            createProduct("Phone", "A smart phone device", 300.0, "phone.png", categoryId);
-            createProduct("Laptop", "Portable laptop computer", 900.0, "laptop.png", categoryId);
+            createProduct("Phone", "A smart phone device", new BigDecimal("300.00"), "phone.png", categoryId);
+            createProduct("Laptop", "Portable laptop computer", new BigDecimal("900.00"), "laptop.png", categoryId);
 
             client.get()
                     .uri("/products")
@@ -247,7 +264,8 @@ class ProductControllerIT extends AbstractIntegrationTest {
                     .headers(headers -> headers.setBearerAuth(adminToken()))
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(productJson(
-                            "Bluetooth Speaker", "Portable bluetooth speaker", 49.99, "speaker.png", categoryId
+                            "Bluetooth Speaker", "Portable bluetooth speaker",
+                            new BigDecimal("49.99"), "speaker.png", categoryId
                     ))
                     .exchange()
                     .expectStatus().isCreated()
@@ -255,7 +273,8 @@ class ProductControllerIT extends AbstractIntegrationTest {
                     .expectBody()
                     .jsonPath("$.id").isNumber()
                     .jsonPath("$.name").isEqualTo("Bluetooth Speaker")
-                    .jsonPath("$.categories[0].id").isEqualTo(categoryId);
+                    .jsonPath("$.categories[0].id").isEqualTo(categoryId)
+                    .jsonPath("$.stock").isEqualTo(10);
 
             assertThat(jdbcTemplate.queryForObject(
                     "SELECT COUNT(*) FROM catalog.tb_product WHERE name = ?",
@@ -284,6 +303,7 @@ class ProductControllerIT extends AbstractIntegrationTest {
                     .jsonPath("$.errors.name").exists()
                     .jsonPath("$.errors.description").exists()
                     .jsonPath("$.errors.price").exists()
+                    .jsonPath("$.errors.stock").exists()
                     .jsonPath("$.errors.categories").exists();
 
             assertThat(jdbcTemplate.queryForObject(
@@ -293,12 +313,27 @@ class ProductControllerIT extends AbstractIntegrationTest {
         }
 
         @Test
+        void databaseRejectsNullStock() {
+            long categoryId = createCategory("General");
+            ProductDTO created = createProduct(
+                    "Product", "A sufficiently long description", new BigDecimal("15.00"), "", categoryId
+            );
+
+            assertThatThrownBy(() -> jdbcTemplate.update(
+                    "UPDATE catalog.tb_product SET stock = NULL WHERE id = ?",
+                    created.id()
+            )).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        }
+
+        @Test
         void returnsNotFoundWhenCategoryDoesNotExist() {
             client.post()
                     .uri("/products")
                     .headers(headers -> headers.setBearerAuth(adminToken()))
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(productJson("Product", "A sufficiently long description", 15.0, "", 99999))
+                    .body(productJson(
+                            "Product", "A sufficiently long description", new BigDecimal("15.00"), "", 99999
+                    ))
                     .exchange()
                     .expectStatus().isNotFound();
 
@@ -333,7 +368,9 @@ class ProductControllerIT extends AbstractIntegrationTest {
                     .uri("/products")
                     .headers(headers -> headers.setBearerAuth(userToken()))
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(productJson("Product", "A sufficiently long description", 15.0, "", categoryId))
+                    .body(productJson(
+                            "Product", "A sufficiently long description", new BigDecimal("15.00"), "", categoryId
+                    ))
                     .exchange()
                     .expectStatus().isForbidden();
         }
@@ -346,7 +383,7 @@ class ProductControllerIT extends AbstractIntegrationTest {
         void adminUpdatesPersistedProduct() {
             long categoryId = createCategory("General");
             ProductDTO created = createProduct(
-                    "Old product", "Original product description", 20.0, "old.png", categoryId
+                    "Old product", "Original product description", new BigDecimal("20.00"), "old.png", categoryId
             );
 
             client.put()
@@ -354,7 +391,8 @@ class ProductControllerIT extends AbstractIntegrationTest {
                     .headers(headers -> headers.setBearerAuth(adminToken()))
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(productJson(
-                            "Updated product", "Updated product description", 32.5, "updated.png", categoryId
+                            "Updated product", "Updated product description",
+                            new BigDecimal("32.50"), 22, "updated.png", categoryId
                     ))
                     .exchange()
                     .expectStatus().isOk()
@@ -362,7 +400,14 @@ class ProductControllerIT extends AbstractIntegrationTest {
                     .jsonPath("$.id").isEqualTo(created.id())
                     .jsonPath("$.name").isEqualTo("Updated product")
                     .jsonPath("$.price").isEqualTo(32.5)
-                    .jsonPath("$.imgUrl").isEqualTo("updated.png");
+                    .jsonPath("$.imgUrl").isEqualTo("updated.png")
+                    .jsonPath("$.stock").isEqualTo(22);
+
+            assertThat(jdbcTemplate.queryForObject(
+                    "SELECT stock FROM catalog.tb_product WHERE id = ?",
+                    Integer.class,
+                    created.id()
+            )).isEqualTo(22);
 
             client.get()
                     .uri("/products/{id}", created.id())
@@ -381,7 +426,9 @@ class ProductControllerIT extends AbstractIntegrationTest {
                     .uri("/products/99999")
                     .headers(headers -> headers.setBearerAuth(adminToken()))
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(productJson("Product", "A sufficiently long description", 15.0, "", categoryId))
+                    .body(productJson(
+                            "Product", "A sufficiently long description", new BigDecimal("15.00"), "", categoryId
+                    ))
                     .exchange()
                     .expectStatus().isNotFound();
         }
@@ -413,7 +460,7 @@ class ProductControllerIT extends AbstractIntegrationTest {
         void returnsNotFoundWhenCategoryDoesNotExist() {
             long existingCategoryId = createCategory("General");
             ProductDTO created = createProduct(
-                    "Product", "A sufficiently long description", 15.0, "", existingCategoryId
+                    "Product", "A sufficiently long description", new BigDecimal("15.00"), "", existingCategoryId
             );
 
             client.put()
@@ -421,7 +468,7 @@ class ProductControllerIT extends AbstractIntegrationTest {
                     .headers(headers -> headers.setBearerAuth(adminToken()))
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(productJson(
-                            "Updated product", "A sufficiently long description", 16.0, "", 99999
+                            "Updated product", "A sufficiently long description", new BigDecimal("16.00"), "", 99999
                     ))
                     .exchange()
                     .expectStatus().isNotFound();
@@ -445,6 +492,7 @@ class ProductControllerIT extends AbstractIntegrationTest {
                               "name": "Updated product",
                               "description": "A sufficiently long description",
                               "price": 15.0,
+                              "stock": 10,
                               "categories": [{"id": 1}]
                             }
                             """)
@@ -463,11 +511,75 @@ class ProductControllerIT extends AbstractIntegrationTest {
                               "name": "Updated product",
                               "description": "A sufficiently long description",
                               "price": 15.0,
+                              "stock": 10,
                               "categories": [{"id": 1}]
                             }
                             """)
                     .exchange()
                     .expectStatus().isForbidden();
+        }
+    }
+
+    @Nested
+    class AddStock {
+
+        @Test
+        void adminAddsQuantityToPersistedStock() {
+            long categoryId = createCategory("General");
+            ProductDTO created = createProduct(
+                    "Product", "A sufficiently long description", new BigDecimal("15.00"), "", categoryId
+            );
+
+            client.patch()
+                    .uri("/products/{id}/stock", created.id())
+                    .headers(headers -> headers.setBearerAuth(adminToken()))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body("5")
+                    .exchange()
+                    .expectStatus().isOk()
+                    .expectBody()
+                    .jsonPath("$.stock").isEqualTo(15);
+
+            assertThat(jdbcTemplate.queryForObject(
+                    "SELECT stock FROM catalog.tb_product WHERE id = ?",
+                    Integer.class,
+                    created.id()
+            )).isEqualTo(15);
+        }
+
+        @Test
+        void rejectsZeroAndNegativeQuantityWithoutChangingStock() {
+            long categoryId = createCategory("General");
+            ProductDTO created = createProduct(
+                    "Product", "A sufficiently long description", new BigDecimal("15.00"), "", categoryId
+            );
+
+            for (String quantity : List.of("0", "-3")) {
+                client.patch()
+                        .uri("/products/{id}/stock", created.id())
+                        .headers(headers -> headers.setBearerAuth(adminToken()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(quantity)
+                        .exchange()
+                        .expectStatus().isBadRequest();
+            }
+
+            assertThat(jdbcTemplate.queryForObject(
+                    "SELECT stock FROM catalog.tb_product WHERE id = ?",
+                    Integer.class,
+                    created.id()
+            )).isEqualTo(10);
+        }
+
+        @Test
+        void returnsNotFoundForUnknownProduct() {
+            client.patch()
+                    .uri("/products/99999/stock")
+                    .headers(headers -> headers.setBearerAuth(adminToken()))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body("5")
+                    .exchange()
+                    .expectStatus().isNotFound();
         }
     }
 
@@ -478,7 +590,7 @@ class ProductControllerIT extends AbstractIntegrationTest {
         void adminDeletesProductAndProductIsNoLongerFound() {
             long categoryId = createCategory("General");
             ProductDTO created = createProduct(
-                    "Disposable product", "Product to delete from catalog", 10.0, "", categoryId
+                    "Disposable product", "Product to delete from catalog", new BigDecimal("10.00"), "", categoryId
             );
 
             client.delete()

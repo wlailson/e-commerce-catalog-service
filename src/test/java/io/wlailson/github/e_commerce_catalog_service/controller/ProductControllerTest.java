@@ -4,7 +4,7 @@ import io.wlailson.github.e_commerce_catalog_service.dto.CategoryDTO;
 import io.wlailson.github.e_commerce_catalog_service.dto.ProductDTO;
 import io.wlailson.github.e_commerce_catalog_service.dto.ProductMinDTO;
 import io.wlailson.github.e_commerce_catalog_service.exceptions.ResourceNotFoundException;
-import io.wlailson.github.e_commerce_catalog_service.security.SecurityConfig;
+import io.wlailson.github.e_commerce_catalog_service.config.SecurityConfig;
 import io.wlailson.github.e_commerce_catalog_service.service.ProductService;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -19,6 +19,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -29,6 +30,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -56,8 +58,10 @@ class ProductControllerTest {
                 10L,
                 "Product name",
                 "A valid product description",
-                25.50,
+                new BigDecimal("25.50"),
                 "https://example.com/product.png",
+                12,
+                2,
                 List.of(new CategoryDTO(3L, "Category"))
         );
     }
@@ -69,6 +73,7 @@ class ProductControllerTest {
                   "description": "A valid product description",
                   "price": 25.50,
                   "imgUrl": "https://example.com/product.png",
+                  "stock": 12,
                   "categories": [{"id": 3, "name": "Category"}]
                 }
                 """;
@@ -83,20 +88,44 @@ class ProductControllerTest {
 
         @Test
         void returnsProductForAuthenticatedRequest() throws Exception {
-            when(service.findById(10L)).thenReturn(productDTO());
+            when(service.findProductById(10L)).thenReturn(productDTO());
 
             mockMvc.perform(get("/products/10").with(jwt()))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.id").value(10))
                     .andExpect(jsonPath("$.name").value("Product name"))
+                    .andExpect(jsonPath("$.price").value(25.50))
+                    .andExpect(jsonPath("$.stock").value(12))
+                    .andExpect(jsonPath("$.reservedStock").value(2))
                     .andExpect(jsonPath("$.categories[0].id").value(3));
 
-            verify(service).findById(10L);
+            verify(service).findProductById(10L);
+        }
+
+        @Test
+        void returnsOutOfStockProductForPublicRequest() throws Exception {
+            ProductDTO outOfStockProduct = new ProductDTO(
+                    10L,
+                    "Product name",
+                    "A valid product description",
+                    new BigDecimal("25.50"),
+                    "https://example.com/product.png",
+                    0,
+                    0,
+                    List.of(new CategoryDTO(3L, "Category"))
+            );
+            when(service.findProductById(10L)).thenReturn(outOfStockProduct);
+
+            mockMvc.perform(get("/products/10"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.stock").value(0));
+
+            verify(service).findProductById(10L);
         }
 
         @Test
         void returnsNotFoundWhenProductDoesNotExist() throws Exception {
-            when(service.findById(404L))
+            when(service.findProductById(404L))
                     .thenThrow(new ResourceNotFoundException("Produto não encontrado"));
 
             mockMvc.perform(get("/products/404").with(jwt()))
@@ -105,13 +134,13 @@ class ProductControllerTest {
 
         @Test
         void allowsAnonymousRequest() throws Exception {
-            when(service.findById(10L)).thenReturn(productDTO());
+            when(service.findProductById(10L)).thenReturn(productDTO());
 
             mockMvc.perform(get("/products/10"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.id").value(10));
 
-            verify(service).findById(10L);
+            verify(service).findProductById(10L);
         }
     }
 
@@ -121,9 +150,9 @@ class ProductControllerTest {
         @Test
         void returnsPagedProductsForAuthenticatedRequest() throws Exception {
             PageRequest pageable = PageRequest.of(1, 2);
-            when(service.findAll(eq("phone"), any()))
+            when(service.findAllProductsByName(eq("phone"), any()))
                     .thenReturn(new PageImpl<>(
-                            List.of(new ProductMinDTO(10L, "Phone", 99.99, "phone.png")),
+                            List.of(new ProductMinDTO(10L, "Phone", new BigDecimal("99.99"), "phone.png", 7, 1)),
                             pageable,
                             3
                     ));
@@ -136,21 +165,42 @@ class ProductControllerTest {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.content[0].id").value(10))
                     .andExpect(jsonPath("$.content[0].name").value("Phone"))
-                    .andExpect(jsonPath("$.content[0].price").value(99.99));
+                    .andExpect(jsonPath("$.content[0].price").value(99.99))
+                    .andExpect(jsonPath("$.content[0].stock").value(7))
+                    .andExpect(jsonPath("$.content[0].reservedStock").value(1));
 
-            verify(service).findAll(eq("phone"), eq(pageable));
+            verify(service).findAllProductsByName(eq("phone"), eq(pageable));
+        }
+
+        @Test
+        void returnsOutOfStockProductsForPublicRequest() throws Exception {
+            PageRequest pageable = PageRequest.of(0, 10);
+            when(service.findAllProductsByName(eq(""), eq(pageable)))
+                    .thenReturn(new PageImpl<>(
+                            List.of(new ProductMinDTO(10L, "Out of stock", BigDecimal.ONE, null, 0, 0)),
+                            pageable,
+                            1
+                    ));
+
+            mockMvc.perform(get("/products")
+                            .param("page", "0")
+                            .param("size", "10"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content[0].stock").value(0));
+
+            verify(service).findAllProductsByName("", pageable);
         }
 
         @Test
         void allowsAnonymousRequest() throws Exception {
-            when(service.findAll(eq(""), any()))
+            when(service.findAllProductsByName(eq(""), any()))
                     .thenReturn(new PageImpl<>(List.of()));
 
             mockMvc.perform(get("/products"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.content").isEmpty());
 
-            verify(service).findAll(eq(""), any());
+            verify(service).findAllProductsByName(eq(""), any());
         }
     }
 
@@ -159,7 +209,7 @@ class ProductControllerTest {
 
         @Test
         void createsProductForAdmin() throws Exception {
-            when(service.insert(any(ProductDTO.class))).thenReturn(productDTO());
+            when(service.insertProduct(any(ProductDTO.class))).thenReturn(productDTO());
 
             mockMvc.perform(post("/products")
                             .with(adminJwt())
@@ -170,7 +220,7 @@ class ProductControllerTest {
                     .andExpect(jsonPath("$.id").value(10))
                     .andExpect(jsonPath("$.name").value("Product name"));
 
-            verify(service).insert(any(ProductDTO.class));
+            verify(service).insertProduct(any(ProductDTO.class));
         }
 
         @Test
@@ -186,9 +236,11 @@ class ProductControllerTest {
                                       "categories": []
                                     }
                                     """))
-                    .andExpect(status().isBadRequest());
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.detail").value("One or more fields are invalid"))
+                    .andExpect(jsonPath("$.errors.name").exists());
 
-            verify(service, never()).insert(any());
+            verify(service, never()).insertProduct(any());
         }
 
         @Test
@@ -198,7 +250,7 @@ class ProductControllerTest {
                             .content(validProductJson()))
                     .andExpect(status().isUnauthorized());
 
-            verify(service, never()).insert(any());
+            verify(service, never()).insertProduct(any());
         }
 
         @Test
@@ -209,7 +261,7 @@ class ProductControllerTest {
                             .content(validProductJson()))
                     .andExpect(status().isForbidden());
 
-            verify(service, never()).insert(any());
+            verify(service, never()).insertProduct(any());
         }
     }
 
@@ -218,7 +270,7 @@ class ProductControllerTest {
 
         @Test
         void updatesProductForAdmin() throws Exception {
-            when(service.update(eq(10L), any(ProductDTO.class))).thenReturn(productDTO());
+            when(service.updateProduct(eq(10L), any(ProductDTO.class))).thenReturn(productDTO());
 
             mockMvc.perform(put("/products/10")
                             .with(adminJwt())
@@ -228,7 +280,7 @@ class ProductControllerTest {
                     .andExpect(jsonPath("$.id").value(10))
                     .andExpect(jsonPath("$.name").value("Product name"));
 
-            verify(service).update(eq(10L), any(ProductDTO.class));
+            verify(service).updateProduct(eq(10L), any(ProductDTO.class));
         }
 
         @Test
@@ -238,7 +290,7 @@ class ProductControllerTest {
                             .content(validProductJson()))
                     .andExpect(status().isUnauthorized());
 
-            verify(service, never()).update(any(), any());
+            verify(service, never()).updateProduct(any(), any());
         }
 
         @Test
@@ -249,7 +301,46 @@ class ProductControllerTest {
                             .content(validProductJson()))
                     .andExpect(status().isForbidden());
 
-            verify(service, never()).update(any(), any());
+            verify(service, never()).updateProduct(any(), any());
+        }
+    }
+
+    @Nested
+    class AddStock {
+
+        @Test
+        void addsStockForAdmin() throws Exception {
+            when(service.addStock(10L, 5)).thenReturn(productDTO());
+
+            mockMvc.perform(patch("/products/10/stock")
+                            .with(adminJwt())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("5"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.stock").value(12));
+
+            verify(service).addStock(10L, 5);
+        }
+
+        @Test
+        void rejectsUnauthenticatedRequest() throws Exception {
+            mockMvc.perform(patch("/products/10/stock")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("5"))
+                    .andExpect(status().isUnauthorized());
+
+            verify(service, never()).addStock(any(), any());
+        }
+
+        @Test
+        void rejectsNonAdminRequest() throws Exception {
+            mockMvc.perform(patch("/products/10/stock")
+                            .with(jwt())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("5"))
+                    .andExpect(status().isForbidden());
+
+            verify(service, never()).addStock(any(), any());
         }
     }
 
@@ -261,7 +352,7 @@ class ProductControllerTest {
             mockMvc.perform(delete("/products/10").with(adminJwt()))
                     .andExpect(status().isNoContent());
 
-            verify(service).deleteById(10L);
+            verify(service).deleteProductById(10L);
         }
 
         @Test
@@ -269,7 +360,7 @@ class ProductControllerTest {
             mockMvc.perform(delete("/products/10"))
                     .andExpect(status().isUnauthorized());
 
-            verify(service, never()).deleteById(any());
+            verify(service, never()).deleteProductById(any());
         }
 
         @Test
@@ -277,7 +368,7 @@ class ProductControllerTest {
             mockMvc.perform(delete("/products/10").with(jwt()))
                     .andExpect(status().isForbidden());
 
-            verify(service, never()).deleteById(any());
+            verify(service, never()).deleteProductById(any());
         }
     }
 }

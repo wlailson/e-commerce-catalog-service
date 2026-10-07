@@ -3,6 +3,8 @@ package io.wlailson.github.e_commerce_catalog_service.security;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
+import io.wlailson.github.e_commerce_catalog_service.config.JwtDecoderConfig;
+import io.wlailson.github.e_commerce_catalog_service.config.JwtProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;

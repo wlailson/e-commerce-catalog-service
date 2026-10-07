@@ -1,4 +1,4 @@
-package io.wlailson.github.e_commerce_catalog_service.security;
+package io.wlailson.github.e_commerce_catalog_service.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
