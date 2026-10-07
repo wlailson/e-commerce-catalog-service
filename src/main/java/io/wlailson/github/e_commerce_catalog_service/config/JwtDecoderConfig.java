@@ -1,4 +1,4 @@
-package io.wlailson.github.e_commerce_catalog_service.security;
+package io.wlailson.github.e_commerce_catalog_service.config;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -14,12 +14,12 @@ import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(JwtProperties.class)
+@EnableConfigurationProperties({JwtProperties.class, KafkaProperties.class})
 public class JwtDecoderConfig {
 
     @Bean
     @ConditionalOnMissingBean(JwtDecoder.class)
-    JwtDecoder resourceServerJwtDecoder(JwtProperties properties) throws GeneralSecurityException {
+    public JwtDecoder resourceServerJwtDecoder(JwtProperties properties) throws GeneralSecurityException {
         if (properties.publicKey() == null || properties.publicKey().isBlank()) {
             throw new IllegalStateException("JWT_PUBLIC_KEY must contain an RSA public key");
         }

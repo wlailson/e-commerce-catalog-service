@@ -14,6 +14,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
+import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.List;
 
@@ -32,12 +33,18 @@ class ProductRepositoryTest {
     private ProductRepository productRepository;
 
     private Product product(String name) {
+        return product(name, 8);
+    }
+
+    private Product product(String name, int stock) {
         return new Product(
                 null,
                 name,
                 "A sufficiently long product description",
-                10.0,
+                new BigDecimal("10.00"),
                 null,
+                stock,
+                0,
                 new HashSet<>()
         );
     }
@@ -61,6 +68,12 @@ class ProductRepositoryTest {
             assertThat(result.getContent())
                     .extracting(Product::getName)
                     .containsExactly("Phone Stand", "Wireless Phone Case");
+            assertThat(result.getContent())
+                    .extracting(Product::getPrice)
+                    .containsOnly(new BigDecimal("10.00"));
+            assertThat(result.getContent())
+                    .extracting(Product::getStock)
+                    .containsOnly(8);
             assertThat(result.getTotalElements()).isEqualTo(2);
         }
 
@@ -76,6 +89,28 @@ class ProductRepositoryTest {
 
             assertThat(result.getContent()).hasSize(3);
             assertThat(result.getTotalElements()).isEqualTo(3);
+        }
+
+        @Test
+        void includesOutOfStockProductsInSearch() {
+            productRepository.saveAllAndFlush(List.of(
+                    product("Available Phone", 3),
+                    product("Unavailable Phone", 0),
+                    product("Available Laptop", 1)
+            ));
+
+            Page<Product> result = productRepository.searchByName(
+                    "phone",
+                    PageRequest.of(0, 10)
+            );
+
+            assertThat(result.getContent())
+                    .extracting(Product::getName)
+                    .containsExactlyInAnyOrder("Available Phone", "Unavailable Phone");
+            assertThat(result.getContent())
+                    .extracting(Product::getStock)
+                    .contains(0);
+            assertThat(result.getTotalElements()).isEqualTo(2);
         }
 
         @Test
@@ -117,6 +152,21 @@ class ProductRepositoryTest {
                     .extracting(Product::getName)
                     .containsExactly("Phone C");
             assertThat(secondPage.getTotalElements()).isEqualTo(3);
+        }
+
+        @Test
+        void findsProductByIdRegardlessOfStock() {
+            Product outOfStock = productRepository.saveAndFlush(product("Unavailable", 0));
+            Product inStock = productRepository.saveAndFlush(product("Available", 2));
+
+            assertThat(productRepository.findById(outOfStock.getId()))
+                    .get()
+                    .extracting(Product::getStock)
+                    .isEqualTo(0);
+            assertThat(productRepository.findById(inStock.getId()))
+                    .get()
+                    .extracting(Product::getName)
+                    .isEqualTo("Available");
         }
     }
 }

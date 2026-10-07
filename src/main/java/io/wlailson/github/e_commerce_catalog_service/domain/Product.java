@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -28,9 +29,15 @@ public class Product {
     private String description;
 
     @Column(nullable = false)
-    private Double price;
+    private BigDecimal price;
 
     private String imgUrl;
+
+    @Column(nullable = false)
+    private Integer stock;
+
+    @Column(name = "reserved_stock", nullable = false)
+    private Integer reservedStock = 0;
 
     @ManyToMany
     @JoinTable(name = "tb_product_category",
