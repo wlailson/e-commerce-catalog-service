@@ -12,6 +12,10 @@ Serviço de catálogo responsável por consultar e manter produtos, categorias e
 - springdoc-openapi / Swagger UI.
 - Testes com JUnit Jupiter, Mockito e Testcontainers para PostgreSQL e Kafka.
 
+## Swagger
+
+[📚 Acessar Swagger](https://wlailson.github.io/e-commerce-catalog-service/)
+
 ## Executar localmente
 
 Pré-requisitos: JDK 25, PostgreSQL e Kafka acessíveis. O perfil de desenvolvimento é ativado por padrão e sua configuração está em `src/main/resources/application-dev.yaml`; ajuste os valores locais do banco antes de iniciar.
