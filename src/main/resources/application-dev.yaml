@@ -1,21 +1,13 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5480/wlailsondb
+    url: jdbc:postgresql://localhost:5480/dev_catalog_db
     username: wlailson
     password: wlailson
     driver-class-name: org.postgresql.Driver
-
-  flyway:
-    schemas:
-      - catalog
-    default-schema: catalog
-    create-schemas: true
-
 
   jpa:
     show-sql: true
     properties:
       hibernate:
-        default_schema: catalog
         format_sql: true
         highlight_sql: true

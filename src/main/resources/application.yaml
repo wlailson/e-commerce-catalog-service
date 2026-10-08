@@ -13,6 +13,22 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:order-group}
+      auto-offset-reset: ${KAFKA_AUTO_OFFSET_RESET:earliest}
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      concurrency: ${KAFKA_LISTENER_CONCURRENCY:1}
+
+app:
+  kafka:
+    topics:
+      order-created: ${KAFKA_TOPIC_ORDER_CREATED:order-created-event}
+      order-updated: ${KAFKA_TOPIC_ORDER_UPDATED:order-updated-event}
+
 jwt:
   public-key: ${JWT_PUBLIC_KEY}
 
@@ -21,3 +37,26 @@ cors:
 
 server:
   port: ${SERVER_PORT:8080}
+
+management:
+  metrics:
+    tags:
+      application: prometheus-grafana
+
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - info
+          - prometheus
+          - logfile
+
+  endpoint:
+    health:
+      show-details: always
